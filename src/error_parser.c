@@ -120,6 +120,7 @@ void error_parser_initialize(ErrorParser *errorParser)
     errorParser->s3ErrorDetails.message = 0;
     errorParser->s3ErrorDetails.resource = 0;
     errorParser->s3ErrorDetails.furtherDetails = 0;
+    errorParser->s3ErrorDetails.curlError = 0;
     errorParser->s3ErrorDetails.extraDetailsCount = 0;
     errorParser->s3ErrorDetails.extraDetails = errorParser->extraDetails;
     errorParser->errorXmlParserInitialized = 0;
@@ -127,6 +128,7 @@ void error_parser_initialize(ErrorParser *errorParser)
     string_buffer_initialize(errorParser->message);
     string_buffer_initialize(errorParser->resource);
     string_buffer_initialize(errorParser->furtherDetails);
+    string_buffer_initialize(errorParser->curlError);
     string_multibuffer_initialize(errorParser->extraDetailsNamesValues);
 }
 
@@ -143,6 +145,13 @@ S3Status error_parser_add(ErrorParser *errorParser, char *buffer,
     return simplexml_add(&(errorParser->errorXmlParser), buffer, bufferSize);
 }
 
+void error_parser_append_curl_error(ErrorParser *errorParser, char *buffer,
+                                    int bufferSize)
+{
+    long fit=0;
+    string_buffer_append(errorParser->curlError, buffer, bufferSize, fit);
+    (void) fit;
+}
 
 void error_parser_convert_status(ErrorParser *errorParser, S3Status *status)
 {

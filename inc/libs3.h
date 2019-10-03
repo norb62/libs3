@@ -975,6 +975,12 @@ typedef struct S3ErrorDetails
     const char *furtherDetails;
 
     /**
+     * This gives human-readable further details describing the curl specifics of
+     * this error
+     **/
+    const char *curlError;
+
+    /**
      * This gives the number of S3NameValue pairs present in the extraDetails
      * array
      **/
