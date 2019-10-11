@@ -426,6 +426,7 @@ typedef struct ListBucketContents
     string_buffer(size, 24);
     string_buffer(ownerId, 256);
     string_buffer(ownerDisplayName, 256);
+    string_buffer(storageClass, 256);
 } ListBucketContents;
 
 
@@ -437,6 +438,7 @@ static void initialize_list_bucket_contents(ListBucketContents *contents)
     string_buffer_initialize(contents->size);
     string_buffer_initialize(contents->ownerId);
     string_buffer_initialize(contents->ownerDisplayName);
+    string_buffer_initialize(contents->storageClass);
 }
 
 // We read up to 32 Contents at a time
@@ -499,6 +501,9 @@ static S3Status make_list_bucket_callback(ListBucketData *lbData)
             contentSrc->ownerId[0] ?contentSrc->ownerId : 0;
         contentDest->ownerDisplayName = (contentSrc->ownerDisplayName[0] ?
                                          contentSrc->ownerDisplayName : 0);
+        contentDest->storageClass = (contentSrc->storageClass[0] ?
+                                         contentSrc->storageClass : 0);
+        
     }
 
     // Make the common prefixes array
@@ -577,6 +582,13 @@ static S3Status listBucketXmlCallback(const char *elementPath,
                 return S3StatusXmlParseFailure;
             }
         }
+        else if (!strcmp(elementPath,
+                         "ListBucketResult/Contents/StorageClass")) {
+            ListBucketContents *contents =
+                &(lbData->contents[lbData->contentsCount]);
+            string_buffer_append
+                (contents->storageClass, data, dataLen, fit);
+        }
     }
     else {
         if (!strcmp(elementPath, "ListBucketResult/Contents")) {
@@ -636,6 +648,8 @@ static S3Status listBucketPropertiesCallback
 static S3Status listBucketDataCallback(int bufferSize, const char *buffer,
                                        void *callbackData)
 {
+
+    printf ("LISTBUCKET %s", buffer);
     ListBucketData *lbData = (ListBucketData *) callbackData;
 
     return simplexml_add(&(lbData->simpleXml), buffer, bufferSize);

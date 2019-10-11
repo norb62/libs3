@@ -6,6 +6,7 @@ S3_create_request_context
 S3_deinitialize
 S3_delete_bucket
 S3_delete_object
+S3_restore_object
 S3_destroy_request_context
 S3_generate_authenticated_query_string
 S3_get_acl

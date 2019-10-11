@@ -622,6 +622,18 @@ typedef struct S3ResponseProperties
      * encryption is in effect for the object.
      **/
     char usesServerSideEncryption;
+
+    /**
+     * This optional field provides an indication of whether or not
+     * this object is on glacier.  This field is only
+     * meaningful if the request was an object put, copy, get, or head
+     * request.
+     * If this value is 0, then server-side encryption is not in effect for
+     * the object (or the request was one for which server-side encryption is
+     * not a meaningful value); if this value is non-zero, then server-side
+     * encryption is in effect for the object.
+     */
+    const char *restore;
 } S3ResponseProperties;
 
 
@@ -776,6 +788,12 @@ typedef struct S3ListBucketContent
      * access permissions allow it to be viewed.
      **/
     const char *ownerDisplayName;
+
+    /**
+     * This is the storage Class name of the owner of the key; it is present only if
+     * access permissions allow it to be viewed.
+     **/
+    const char *storageClass;
 } S3ListBucketContent;
 
 
@@ -2215,6 +2233,21 @@ void S3_head_object(const S3BucketContext *bucketContext, const char *key,
  **/
 void S3_delete_object(const S3BucketContext *bucketContext, const char *key,
                       S3RequestContext *requestContext,
+                      int timeoutMs,
+                      const S3ResponseHandler *handler, void *callbackData);
+
+
+typedef enum
+{
+    S3RestoreTierExpedited              = 0,
+    S3RestoreTierStandard               = 1,
+    S3RestoreTierBulk                   = 2
+} S3RestoreTier;
+
+void S3_restore_object(const S3BucketContext *bucketContext, const char *key,
+                      S3RequestContext *requestContext,
+                      int days,
+                      S3RestoreTier tier,
                       int timeoutMs,
                       const S3ResponseHandler *handler, void *callbackData);
 

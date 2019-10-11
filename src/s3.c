@@ -815,6 +815,7 @@ static S3Status responsePropertiesCallback
     if (properties->usesServerSideEncryption) {
         printf("UsesServerSideEncryption: true\n");
     }
+    print_nonnull("x-amz-restore", restore);
 
     return S3StatusOK;
 }
@@ -1149,10 +1150,11 @@ static void printListBucketHeader(int allDetails)
            "                       Key",
            "   Last Modified", "Size");
     if (allDetails) {
-        printf("  %-34s  %-64s  %-12s",
+        printf("  %-34s  %-64s  %-12s %-12s",
                "               ETag",
                "                            Owner ID",
-               "Display Name");
+               "Display Name",
+               "     Class");
     }
     printf("\n");
     printf("--------------------------------------------------  "
@@ -1160,7 +1162,7 @@ static void printListBucketHeader(int allDetails)
     if (allDetails) {
         printf("  ----------------------------------  "
                "-------------------------------------------------"
-               "---------------  ------------");
+               "---------------  ------------  -------------------");
     }
     printf("\n");
 }
@@ -1214,6 +1216,9 @@ static S3Status listBucketCallback(int isTruncated, const char *nextMarker,
             if (content->ownerDisplayName) {
                 printf("Owner Display Name: %s\n", content->ownerDisplayName);
             }
+            if (content->storageClass) {
+                printf("Storage Class: %s\n", content->storageClass);
+            }
         }
         else {
             time_t t = (time_t) content->lastModified;
@@ -1244,11 +1249,13 @@ static S3Status listBucketCallback(int isTruncated, const char *nextMarker,
             }
             printf("%-50s  %s  %s", content->key, timebuf, sizebuf);
             if (data->allDetails) {
-                printf("  %-34s  %-64s  %-12s",
+                printf("  %-34s  %-64s  %-12s   %-12s",
                        content->eTag,
                        content->ownerId ? content->ownerId : "",
                        content->ownerDisplayName ?
-                       content->ownerDisplayName : "");
+                       content->ownerDisplayName : "",
+                       content->storageClass ? 
+                       content->storageClass : "");
             }
             printf("\n");
         }

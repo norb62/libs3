@@ -401,3 +401,162 @@ void S3_delete_object(const S3BucketContext *bucketContext, const char *key,
     // Perform the request
     request_perform(&params, requestContext);
 }
+
+// restore object --------------------------------------------------------------
+
+static const char *RestoreTiersString[] = {
+   "Expedited",
+   "Standard",
+   "Bulk"
+};
+
+
+static S3Status generateRestoreXmlDocument(S3RestoreTier tier,
+                                       int days,
+                                       int *xmlDocumentLenReturn,
+                                       char *xmlDocument,
+                                       int xmlDocumentBufferSize)
+{
+    *xmlDocumentLenReturn = 0;
+
+#define append(fmt, ...)                                        \
+    do {                                                        \
+        *xmlDocumentLenReturn += snprintf                       \
+            (&(xmlDocument[*xmlDocumentLenReturn]),             \
+             xmlDocumentBufferSize - *xmlDocumentLenReturn - 1, \
+             fmt, __VA_ARGS__);                                 \
+        if (*xmlDocumentLenReturn >= xmlDocumentBufferSize) {   \
+            return S3StatusXmlDocumentTooLarge;                 \
+        } \
+    } while (0)
+
+    append("<RestoreRequest><Days>%d</Days><GlacierJobParameters>"
+           "<Tier>%s</Tier></GlacierJobParameters></RestoreRequest>",
+           days,
+           RestoreTiersString[tier]);
+
+#undef append
+
+    return S3StatusOK;
+}
+
+typedef struct RestoreXmlData
+{
+    S3ResponsePropertiesCallback *responsePropertiesCallback;
+    S3ResponseCompleteCallback *responseCompleteCallback;
+    void *callbackData;
+
+    int xmlDocumentLen;
+    const char *xmlDocument;
+    int xmlDocumentBytesWritten;
+
+} RestoreXmlData;
+
+static S3Status RestoreDataPropertiesCallback
+    (const S3ResponseProperties *responseProperties, void *callbackData)
+{
+    RestoreXmlData *paData = (RestoreXmlData *) callbackData;
+
+    return (*(paData->responsePropertiesCallback))
+        (responseProperties, paData->callbackData);
+}
+
+static int RestoreDataCallback(int bufferSize, char *buffer, void *callbackData)
+{
+    RestoreXmlData *paData = (RestoreXmlData *) callbackData;
+
+    int remaining = (paData->xmlDocumentLen -
+                     paData->xmlDocumentBytesWritten);
+
+    int toCopy = bufferSize > remaining ? remaining : bufferSize;
+
+    if (!toCopy) {
+        return 0;
+    }
+
+    memcpy(buffer, &(paData->xmlDocument
+                     [paData->xmlDocumentBytesWritten]), toCopy);
+
+    printf("\nRestoreDataCallback: for %d return %s\n", toCopy, &paData->xmlDocument[paData->xmlDocumentBytesWritten]);
+
+    paData->xmlDocumentBytesWritten += toCopy;
+
+    return toCopy;
+}
+
+static void RestoreCompleteCallback(S3Status requestStatus,
+                                   const S3ErrorDetails *s3ErrorDetails,
+                                   void *callbackData)
+{
+    RestoreXmlData *paData = (RestoreXmlData *) callbackData;
+
+    (*(paData->responseCompleteCallback))
+        (requestStatus, s3ErrorDetails, paData->callbackData);
+}
+
+// Use a rather arbitrary max size for the document of 64K
+#define S3_RESTORE_XML_DOC_MAXSIZE (64 * 1024)
+
+void S3_restore_object(const S3BucketContext *bucketContext, const char *key,
+                      S3RequestContext *requestContext,
+                      int days,
+                      S3RestoreTier tier,
+                      int timeoutMs,
+                      const S3ResponseHandler *handler, void *callbackData)
+{
+    string_buffer(generatedRestoreXmlDocument, S3_RESTORE_XML_DOC_MAXSIZE);
+
+    S3Status generateXmlStatus = generateRestoreXmlDocument(tier, days,
+                                       &generatedRestoreXmlDocumentLen,
+                                       generatedRestoreXmlDocument,
+                                       S3_RESTORE_XML_DOC_MAXSIZE);
+
+    if (generateXmlStatus != S3StatusOK && handler && handler->completeCallback) {
+        handler->completeCallback(generateXmlStatus, NULL, callbackData);
+        return;
+    }
+
+    RestoreXmlData restoreXMLData;
+    restoreXMLData.responsePropertiesCallback = handler->propertiesCallback;
+    restoreXMLData.responseCompleteCallback = handler->completeCallback;
+    restoreXMLData.callbackData = callbackData;
+
+    restoreXMLData.xmlDocumentLen = generatedRestoreXmlDocumentLen;
+    restoreXMLData.xmlDocument = generatedRestoreXmlDocument;
+    restoreXMLData.xmlDocumentBytesWritten = 0;
+
+    // Set up the RequestParams
+    RequestParams params =
+    {
+        HttpRequestTypePOST,                        // httpRequestType
+        { bucketContext->hostName,                    // hostName
+          bucketContext->bucketName,                  // bucketName
+          bucketContext->protocol,                    // protocol
+          bucketContext->uriStyle,                    // uriStyle
+          bucketContext->accessKeyId,                 // accessKeyId
+          bucketContext->secretAccessKey,             // secretAccessKey
+          bucketContext->securityToken,               // securityToken
+          bucketContext->authRegion },                // authRegion
+        key,                                          // key
+        0,                                            // queryParams
+        "restore",                                    // subResource
+        0,                                            // copySourceBucketName
+        0,                                            // copySourceKey
+        0,                                            // getConditions
+        0,                                            // startByte
+        0,                                            // byteCount
+        0,                                            // putProperties
+        &RestoreDataPropertiesCallback,               // propertiesCallback
+        &RestoreDataCallback,                         // toS3Callback
+        generatedRestoreXmlDocumentLen,               // toS3CallbackTotalSize
+        0,                                            // fromS3Callback
+        &RestoreCompleteCallback,                     // completeCallback
+        &restoreXMLData,                              // callbackData
+        timeoutMs                                     // timeoutMs
+    };
+
+    (void) (params);
+    (void) (requestContext);
+    // Perform the request
+    request_perform(&params, requestContext);
+}
