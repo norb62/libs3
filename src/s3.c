@@ -166,8 +166,10 @@ static char putenvBufG[256];
 #define TARGET_PREFIX_PREFIX_LEN (sizeof(TARGET_PREFIX_PREFIX) - 1)
 #define HTTP_METHOD_PREFIX "method="
 #define HTTP_METHOD_PREFIX_LEN (sizeof(HTTP_METHOD_PREFIX) - 1)
-
-
+#define  RESTORE_DAYS_PREFIX "days="
+#define  RESTORE_DAYS_PREFIX_LEN (sizeof(RESTORE_DAYS_PREFIX) - 1)
+#define  RESTORE_TIER_PREFIX "tier="
+#define  RESTORE_TIER_PREFIX_LEN (sizeof(RESTORE_TIER_PREFIX) - 1)
 // util ----------------------------------------------------------------------
 
 static void S3_init()
@@ -363,6 +365,11 @@ static void usageExit(FILE *out)
 "     [max-parts]        : Sets the maximum number of parts to return in the response body.\n"
 "     [encoding-type]    : Requests Amazon S3 to encode the response and specifies the encoding method to use.\n"
 "     [part-number-marker] : Specifies the part after which listing should begin.\n"
+"\n"
+"   restore              : request Glacier restoration for a specific object.\n"
+"     <bucket>/<key>     : Bucket/key of object to restore\n"
+"     [days]             : retention of restored object in days\n"
+"     [tier]             : restoration tier. Either 'expedited', 'standard' or 'bulk'\n"
 "\n"
 " Canned ACLs:\n"
 "\n"
@@ -3891,6 +3898,83 @@ void set_logging(int argc, char **argv, int optindex)
     S3_deinitialize();
 }
 
+// restore object ---------------------------------------------------------------
+
+static void restore_object(int argc, char **argv, int optindex)
+{
+    if (optindex == argc) {
+        fprintf(stderr, "\nERROR: Missing parameter: bucket/key\n");
+        usageExit(stderr);
+    }
+
+
+    // Split bucket/key
+    char *slash = argv[optindex];
+
+    while (*slash && (*slash != '/')) {
+        slash++;
+    }
+    if (!*slash || !*(slash + 1)) {
+        fprintf(stderr, "\nERROR: Invalid bucket/key name: %s\n",
+                argv[optindex]);
+        usageExit(stderr);
+    }
+    *slash++ = 0;
+
+    const char *bucketName = argv[optindex++];
+    const char *key = slash;
+    S3RestoreTier restoreTier=0;
+    int restoreNumDays=0;
+
+    while (optindex < argc) {
+        char *param = argv[optindex++];
+        if (!strncmp(param, RESTORE_DAYS_PREFIX, RESTORE_DAYS_PREFIX_LEN)) {
+            restoreNumDays = convertInt(&(param[RESTORE_DAYS_PREFIX_LEN]), "days");
+        }
+        else if (!strncmp(param, RESTORE_TIER_PREFIX, RESTORE_TIER_PREFIX_LEN)) {
+            const char *restoreTierStr = &(param[RESTORE_TIER_PREFIX_LEN]);
+            if (!strncasecmp(restoreTierStr, "expedited", 9)) {
+                restoreTier = S3RestoreTierExpedited;
+            } else if (!strncasecmp(restoreTierStr, "standard", 8)) {
+                restoreTier = S3RestoreTierStandard;
+            } else if (!strncasecmp(restoreTierStr, "bulk", 4)) {
+                restoreTier = S3RestoreTierBulk;
+            }
+        }
+    }
+
+    S3_init();
+
+    S3BucketContext bucketContext =
+    {
+        0,
+        bucketName,
+        protocolG,
+        uriStyleG,
+        accessKeyIdG,
+        secretAccessKeyG,
+        0,
+        awsRegionG
+    };
+
+    S3ResponseHandler responseHandler =
+    {
+        &responsePropertiesCallback,
+        &responseCompleteCallback
+    };
+
+    do {
+        S3_restore_object(&bucketContext, key, 0, restoreNumDays, restoreTier, 0, &responseHandler, 0);
+    } while (S3_status_is_retryable(statusG) && should_retry());
+
+    if ((statusG != S3StatusOK) &&
+        (statusG != S3StatusErrorPreconditionFailed)) {
+        printError();
+    }
+
+    S3_deinitialize();
+}
+
 
 // main ----------------------------------------------------------------------
 
@@ -4049,6 +4133,9 @@ int main(int argc, char **argv)
     }
     else if (!strcmp(command, "listparts")) {
         list_parts(argc, argv, optind);
+    }
+    else if (!strcmp(command, "restore")) {
+        restore_object(argc, argv, optind);
     }
     else {
         fprintf(stderr, "Unknown command: %s\n", command);

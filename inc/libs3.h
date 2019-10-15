@@ -508,6 +508,18 @@ typedef enum
     S3CannedAclBucketOwnerFullControl   = 4  /* bucket-owner-full-control */
 } S3CannedAcl;
 
+/**
+ * S3RestoreTier describes the priority of a Glacier restoration transfer
+ * 
+ * S3RestoreTierExpedited is the highest, more expensive restore priority
+ * S3RestoreTierBulk is the lowest, less expensive one.
+ **/
+typedef enum
+{
+    S3RestoreTierExpedited              = 0,
+    S3RestoreTierStandard               = 1,
+    S3RestoreTierBulk                   = 2
+} S3RestoreTier;
 
 /** **************************************************************************
  * Data Types
@@ -2237,13 +2249,21 @@ void S3_delete_object(const S3BucketContext *bucketContext, const char *key,
                       const S3ResponseHandler *handler, void *callbackData);
 
 
-typedef enum
-{
-    S3RestoreTierExpedited              = 0,
-    S3RestoreTierStandard               = 1,
-    S3RestoreTierBulk                   = 2
-} S3RestoreTier;
-
+/**
+ * Restore an object from S3 Glacier.
+ *
+ * @param bucketContext gives the bucket and associated parameters for this
+ *        request
+ * @param key is the key of the object to restore
+ * @param requestContext if non-NULL, gives the S3RequestContext to add this
+ *        request to, and does not perform the request immediately.  If NULL,
+ *        performs the request immediately and synchronously.
+ * @param days is the number of retention days in the storage bucket
+ * @param tier gives restore priority (Expedited, Standard, Bulk)
+ * @param timeoutMs if not 0 contains total request timeout in milliseconds
+ * @param callbackData will be passed in as the callbackData parameter to
+ *        all callbacks for this request
+ **/
 void S3_restore_object(const S3BucketContext *bucketContext, const char *key,
                       S3RequestContext *requestContext,
                       int days,
