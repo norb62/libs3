@@ -64,6 +64,9 @@ typedef struct ErrorParser
     // Used to buffer the S3 Error Further Details as it is read in
     string_buffer(furtherDetails, 1024);
     
+    // Used to buffer the S3 Error Further Details as it is read in
+    string_buffer(curlError, 1024);
+    
     // The extra details; we support up to EXTRA_DETAILS_SIZE of them
     S3NameValue extraDetails[EXTRA_DETAILS_SIZE];
 
@@ -80,6 +83,8 @@ S3Status error_parser_add(ErrorParser *errorParser, char *buffer,
                           int bufferSize);
 
 void error_parser_convert_status(ErrorParser *errorParser, S3Status *status);
+
+void error_parser_append_curl_error(ErrorParser *errorParser, char *buffer, int bufferSize);
 
 // Always call this
 void error_parser_deinitialize(ErrorParser *errorParser);

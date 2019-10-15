@@ -176,6 +176,32 @@ static void request_headers_done(Request *request)
         request->httpResponseCode = httpResponseCode;
     }
 
+    char *effectiveURL = NULL;
+    if (curl_easy_getinfo(request->curl, CURLINFO_EFFECTIVE_URL, 
+                          &effectiveURL) != CURLE_OK) {
+        // Not able to get the HTTP response code - error
+        request->status = S3StatusInternalError;
+        return;
+    }
+    else if (effectiveURL) {
+        char tmp[1024];
+        snprintf(tmp, 1024, "CURL Effective URL: %s ", effectiveURL);
+        error_parser_append_curl_error(&(request->errorParser), tmp, sizeof(tmp));
+    }
+
+    long osErrNo = 0;
+    if (curl_easy_getinfo(request->curl, CURLINFO_OS_ERRNO, 
+                          &osErrNo) != CURLE_OK) {
+        // Not able to get the HTTP response code - error
+        request->status = S3StatusInternalError;
+        return;
+    }
+    else if (osErrNo != 0) {
+        char tmp[1024];
+        snprintf(tmp, 1024, "CURL OS Error: %ld ", osErrNo);
+        error_parser_append_curl_error(&(request->errorParser), tmp, sizeof(tmp));
+    }
+
     response_headers_handler_done(&(request->responseHeadersHandler),
                                   request->curl);
 
@@ -1278,6 +1304,9 @@ static S3Status setup_curl(Request *request,
     // Set URI
     curl_easy_setopt_safe(CURLOPT_URL, request->uri);
 
+    // CURL debug
+    curl_easy_setopt_safe(CURLOPT_ERRORBUFFER, request->curlError);
+
     // Set request type.
     switch (params->httpRequestType) {
     case HttpRequestTypeHEAD:
@@ -1704,6 +1733,10 @@ void request_finish(Request *request)
         }
     }
 
+    error_parser_append_curl_error(&(request->errorParser), request->curlError, sizeof(request->curlError));
+
+    request->errorParser.s3ErrorDetails.curlError = request->errorParser.curlError;
+
     (*(request->completeCallback))
         (request->status, &(request->errorParser.s3ErrorDetails),
          request->callbackData);
@@ -1727,12 +1760,14 @@ S3Status request_curl_code_to_status(CURLcode code)
         return S3StatusErrorRequestTimeout;
     case CURLE_PARTIAL_FILE:
         return S3StatusOK;
-#if LIBCURL_VERSION_NUM >= 0x071101 /* 7.17.1 */
+#if LIBCURL_VERSION_NUM >= 0x073E00 /* 7.62.0 */
     case CURLE_PEER_FAILED_VERIFICATION:
 #else
-    case CURLE_SSL_PEER_CERTIFICATE:
-#endif
-#if LIBCURL_VERSION_NUM < 0x073e00
+    #if LIBCURL_VERSION_NUM >= 0x071101 /* 7.17.1 */
+        case CURLE_PEER_FAILED_VERIFICATION:
+    #else
+        case CURLE_SSL_PEER_CERTIFICATE:
+    #endif
     case CURLE_SSL_CACERT:
 #endif
         return S3StatusServerFailedVerification;
