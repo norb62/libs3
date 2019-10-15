@@ -1305,7 +1305,7 @@ static S3Status setup_curl(Request *request,
     curl_easy_setopt_safe(CURLOPT_URL, request->uri);
 
     // CURL debug
-    curl_easy_setopt_safe(CURLOPT_ERRORBUFFER, request->curlError);
+    curl_easy_setopt_safe(CURLOPT_ERRORBUFFER, request->errorParser.curlError);
 
     // Set request type.
     switch (params->httpRequestType) {
@@ -1733,7 +1733,7 @@ void request_finish(Request *request)
         }
     }
 
-    error_parser_append_curl_error(&(request->errorParser), request->curlError, sizeof(request->curlError));
+    error_parser_append_curl_error(&(request->errorParser), request->errorParser.curlError, sizeof(request->errorParser.curlError));
 
     request->errorParser.s3ErrorDetails.curlError = request->errorParser.curlError;
 
