@@ -648,8 +648,6 @@ static S3Status listBucketPropertiesCallback
 static S3Status listBucketDataCallback(int bufferSize, const char *buffer,
                                        void *callbackData)
 {
-
-    printf ("LISTBUCKET %s", buffer);
     ListBucketData *lbData = (ListBucketData *) callbackData;
 
     return simplexml_add(&(lbData->simpleXml), buffer, bufferSize);
