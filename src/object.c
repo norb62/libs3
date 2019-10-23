@@ -477,8 +477,6 @@ static int RestoreDataCallback(int bufferSize, char *buffer, void *callbackData)
     memcpy(buffer, &(paData->xmlDocument
                      [paData->xmlDocumentBytesWritten]), toCopy);
 
-    printf("\nRestoreDataCallback: for %d return %s\n", toCopy, &paData->xmlDocument[paData->xmlDocumentBytesWritten]);
-
     paData->xmlDocumentBytesWritten += toCopy;
 
     return toCopy;
